@@ -1,0 +1,6 @@
+{
+  "name": "ClaimSSOT",
+  "description": "Claim Management SSOT builder. Resolves conflicts, clusters claims, and builds a single source of truth using Tinder-like swipe cards and AI assistance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
