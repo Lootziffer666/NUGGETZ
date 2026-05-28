@@ -24,7 +24,8 @@ jobs:
           SDKMANAGER=$(find "$SDK/cmdline-tools" -name sdkmanager -type f 2>/dev/null | sort -V | tail -1)
           if [ -n "$SDKMANAGER" ]; then
             yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-            "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" 2>&1 | tail -5 || true
+            # AGP 9.1.1 requires Build Tools 36.0.0 minimum
+            "$SDKMANAGER" "platforms;android-35" "build-tools;36.0.0" 2>&1 | tail -5 || true
           fi
           printf 'org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8\norg.gradle.parallel=false\norg.gradle.caching=false\norg.gradle.configuration-cache=false\nandroid.nonTransitiveRClass=true\nkotlin.code.style=official\nkotlin.compiler.execution.strategy=in-process\n' > gradle.properties
       - name: Build Debug APK
