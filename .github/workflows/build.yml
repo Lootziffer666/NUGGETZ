@@ -12,24 +12,33 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: Accept Android SDK licenses
-        run: yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
-      - name: Install Android SDK 36
+      - name: Setup Android SDK
         run: |
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
-            "platforms;android-36" "build-tools;35.0.0" 2>/dev/null || \
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
-            "platforms;android-35" "build-tools;35.0.0"
+          SDKMANAGER=$(find "$ANDROID_SDK_ROOT/cmdline-tools" -name sdkmanager -type f 2>/dev/null | sort -V | tail -1)
+          [ -z "$SDKMANAGER" ] && SDKMANAGER="$ANDROID_SDK_ROOT/tools/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" 2>&1 || \
+          "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0" 2>&1 || \
+          echo "Using pre-installed SDK"
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.14.1"
-      - name: Generate Gradle wrapper JAR
-        run: gradle wrapper --gradle-version 8.14.1
+          gradle-version: "9.4.1"
+      - name: Bootstrap Gradle wrapper
+        run: |
+          mkdir -p /tmp/gradle-bootstrap
+          printf 'rootProject.name = "bootstrap"\n' > /tmp/gradle-bootstrap/settings.gradle.kts
+          gradle wrapper --gradle-version 9.4.1 --project-dir /tmp/gradle-bootstrap
+          mkdir -p gradle/wrapper
+          cp /tmp/gradle-bootstrap/gradle/wrapper/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.jar
+          cp /tmp/gradle-bootstrap/gradlew ./gradlew
+          chmod +x ./gradlew
       - name: Build Debug APK
-        run: chmod +x gradlew && ./gradlew assembleDebug --stacktrace
+        run: ./gradlew assembleDebug --stacktrace --no-configuration-cache
       - name: Update .build-outputs
+        if: success()
         run: mkdir -p .build-outputs && cp app/build/outputs/apk/debug/app-debug.apk .build-outputs/app-debug.apk
       - name: Commit build artifacts
+        if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
