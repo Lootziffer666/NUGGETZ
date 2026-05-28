@@ -2,12 +2,10 @@ package com.example.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.BuildConfig
 import com.example.data.Claim
 import com.example.data.ClaimRepository
-import com.example.network.Content
-import com.example.network.GenerateContentRequest
-import com.example.network.Part
+import com.example.network.ChatMessage
+import com.example.network.ChatRequest
 import com.example.network.RetrofitClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,8 +23,8 @@ data class UiState(
     val analysisError: String? = null,
     val totalCount: Int = 0,
     val canUndo: Boolean = false,
-    val useLocalLlm: Boolean = false,
-    val localLlmUrl: String = "http://10.0.2.2:1234/v1/chat/completions"
+    val useLocalLlm: Boolean = true,
+    val localLlmUrl: String = "http://localhost:8080/v1/chat/completions"
 )
 
 class ClaimViewModel(private val repository: ClaimRepository) : ViewModel() {
@@ -88,42 +86,26 @@ class ClaimViewModel(private val repository: ClaimRepository) : ViewModel() {
     }
 
     fun analyzeClaim(claim: Claim) {
-        if (claim.aiAnalysis != null) return // Already analyzed
+        if (claim.aiAnalysis != null) return
         
         viewModelScope.launch {
             _uiState.update { it.copy(isAnalyzing = true, analysisError = null) }
-            val useLocal = _uiState.value.useLocalLlm
             val localUrl = _uiState.value.localLlmUrl
-            val apiKey = BuildConfig.GEMINI_API_KEY
-            
-            if (!useLocal && (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY")) {
-                _uiState.update { it.copy(isAnalyzing = false, analysisError = "API Key missing in Secrets") }
-                return@launch
-            }
 
             try {
                 val analysis = withContext(Dispatchers.IO) {
                     val prompt = "Analyze the following system requirement claim. Identify if it might be contradictory to typical software standards, or cluster it into a specific category (e.g., UI, Networking, Offline). Keep the response under 2 sentences.\n\nClaim: ${claim.content}\nSource: ${claim.sourceFile}"
-                    
-                    if (useLocal) {
-                        val request = com.example.network.ChatRequest(
-                            messages = listOf(com.example.network.ChatMessage("user", prompt))
-                        )
-                        val response = com.example.network.RetrofitClient.localService.generateContent(localUrl, request)
-                        response.choices?.firstOrNull()?.message?.content ?: "No insight found from Local LLM."
-                    } else {
-                        val request = GenerateContentRequest(
-                            contents = listOf(Content(parts = listOf(Part(prompt))))
-                        )
-                        val response = RetrofitClient.service.generateContent(apiKey, request)
-                        response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text ?: "No insight found."
-                    }
+                    val request = ChatRequest(
+                        messages = listOf(ChatMessage("user", prompt))
+                    )
+                    val response = RetrofitClient.localService.generateContent(localUrl, request)
+                    response.choices?.firstOrNull()?.message?.content ?: "No insight found."
                 }
                 
                 repository.update(claim.copy(aiAnalysis = analysis))
                 _uiState.update { it.copy(isAnalyzing = false) }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isAnalyzing = false, analysisError = e.message) }
+                _uiState.update { it.copy(isAnalyzing = false, analysisError = "Bellows nicht erreichbar: ${e.message}") }
             }
         }
     }
