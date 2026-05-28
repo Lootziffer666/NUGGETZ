@@ -12,36 +12,22 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: Setup Android SDK
+      - name: Install Gradle 9.4.1
         run: |
-          SDKMANAGER=$(find "$ANDROID_SDK_ROOT/cmdline-tools" -name sdkmanager -type f 2>/dev/null | sort -V | tail -1)
-          [ -z "$SDKMANAGER" ] && SDKMANAGER="$ANDROID_SDK_ROOT/tools/bin/sdkmanager"
-          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" 2>&1 || \
-          "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0" 2>&1 || \
-          echo "Using pre-installed SDK"
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "9.4.1"
-      - name: Bootstrap Gradle wrapper
+          wget -nv -O /tmp/gradle.zip https://services.gradle.org/distributions/gradle-9.4.1-bin.zip
+          unzip -q /tmp/gradle.zip -d /opt
+          echo "/opt/gradle-9.4.1/bin" >> $GITHUB_PATH
+      - name: Accept Android SDK licenses
         run: |
-          mkdir -p /tmp/gradle-bootstrap
-          printf 'rootProject.name = "bootstrap"\n' > /tmp/gradle-bootstrap/settings.gradle.kts
-          gradle wrapper --gradle-version 9.4.1 --project-dir /tmp/gradle-bootstrap
-          mkdir -p gradle/wrapper
-          cp /tmp/gradle-bootstrap/gradle/wrapper/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.jar
-          cp /tmp/gradle-bootstrap/gradlew ./gradlew
-          chmod +x ./gradlew
+          SDKMANAGER=$(find "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/cmdline-tools" -name sdkmanager -type f 2>/dev/null | sort -V | tail -1)
+          if [ -n "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          fi
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace --no-configuration-cache
-      - name: Update .build-outputs
+        run: gradle assembleDebug --no-configuration-cache --no-daemon --stacktrace
+      - name: Upload APK artifact
         if: success()
-        run: mkdir -p .build-outputs && cp app/build/outputs/apk/debug/app-debug.apk .build-outputs/app-debug.apk
-      - name: Commit build artifacts
-        if: success()
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .build-outputs/app-debug.apk gradle/wrapper/gradle-wrapper.jar || true
-          git diff --staged --quiet || git commit -m "ci: update APK and wrapper jar [skip ci]"
-          git push || true
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
