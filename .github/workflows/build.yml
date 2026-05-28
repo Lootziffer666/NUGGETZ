@@ -12,30 +12,23 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: Install Gradle 9.4.1
+      - name: Install Gradle 9.3.1
         run: |
-          wget -nv -O /tmp/gradle.zip https://services.gradle.org/distributions/gradle-9.4.1-bin.zip
+          wget -nv -O /tmp/gradle.zip https://services.gradle.org/distributions/gradle-9.3.1-bin.zip
           unzip -q /tmp/gradle.zip -d /opt
-          ls /opt/gradle-9.4.1/bin/gradle && echo "Gradle binary OK"
-          echo "/opt/gradle-9.4.1/bin" >> $GITHUB_PATH
-      - name: Setup Android SDK
+          echo "/opt/gradle-9.3.1/bin" >> $GITHUB_PATH
+      - name: Setup Android SDK + CI config
         run: |
           SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          echo "SDK root: $SDK"
-          echo "Installed platforms:"
-          ls "$SDK/platforms/" 2>/dev/null || echo "  (none)"
+          echo "sdk.dir=$SDK" > local.properties
           SDKMANAGER=$(find "$SDK/cmdline-tools" -name sdkmanager -type f 2>/dev/null | sort -V | tail -1)
-          echo "sdkmanager: $SDKMANAGER"
           if [ -n "$SDKMANAGER" ]; then
             yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
             "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" 2>&1 | tail -5 || true
           fi
-          echo "After install:"
-          ls "$SDK/platforms/" 2>/dev/null || echo "  (still none)"
-          echo "sdk.dir=$SDK" > local.properties
-          echo "Created local.properties: $(cat local.properties)"
+          printf 'org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8\norg.gradle.parallel=false\norg.gradle.caching=false\norg.gradle.configuration-cache=false\nandroid.nonTransitiveRClass=true\nkotlin.code.style=official\nkotlin.compiler.execution.strategy=in-process\n' > gradle.properties
       - name: Build Debug APK
-        run: gradle assembleDebug --no-configuration-cache --no-daemon --stacktrace
+        run: gradle assembleDebug --no-daemon --stacktrace
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
       - name: Upload APK artifact
